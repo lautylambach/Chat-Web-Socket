@@ -1,83 +1,84 @@
-const { promises: fs } = require('fs')
+
+const options = require('../src/options/sqlite3.config')
+const knex = require('knex')
+
 
 class ContenedorArchivo {
 
-    constructor(ruta) {
-        this.ruta = ruta;
+    constructor(options, tableName) {
+        const database = knex(options)
+        if (!database.schema.hasTable(tableName)){
+            database.schema.createTable('history', table => {
+                table.increments('id')
+                table.string('autor', 30).nullable(false)    
+                table.string('fyh', 20).nullable(false)    
+                table.float('texto',100)
+            })
+                .then(() => console.log('Table created!'))
+                .catch(err => console.log(err))
+        }
+        this.database = database
+        this.table = tableName
     }
 
     async listar(id) {
-        const objs = await this.listarAll()
-        const buscado = objs.find(o => o.id == id)
-        return buscado
+        this.database.from(this.table).select('*').where('id', id)
+            .then(data=>{
+                return(JSON.parse(JSON.stringify(data)))}
+                )
+            .catch(err => console.log(err))
+            .finally(()=> this.database.destroy())
     }
 
     async listarAll() {
-        try {
-            const objs = await fs.readFile(this.ruta, 'utf-8')
-            return JSON.parse(objs)
-        } catch (error) {
-            return []
-        }
+        this.database.from(this.table).select('*')
+            .then(data=>{
+                return(JSON.parse(JSON.stringify(data)))}
+                )
+            .catch(err => console.log(err))
+            .finally(()=> this.database.destroy())
     }
 
     async guardar(obj) {
-        const objs = await this.listarAll()
-
-        let newId
-        if (objs.length == 0) {
-            newId = 1
-        } else {
-            newId = objs[objs.length - 1].id + 1
-        }
-
-        const newObj = { ...obj, id: newId }
-        objs.push(newObj)
-
-        try {
-            await fs.writeFile(this.ruta, JSON.stringify(objs, null, 2))
-            return newId
-        } catch (error) {
-            throw new Error(`Error al guardar: ${error}`)
-        }
+        const newObj = { ...obj}
+        this.database(this.table).insert(newObj)
+            .then(data=>{
+                return(JSON.parse(JSON.stringify(data)))}
+            )
+            .catch(err => console.log(err))
+            .finally(()=> this.database.destroy())
     }
 
     async actualizar(elem, id) {
-        const objs = await this.listarAll()
-        const index = objs.findIndex(o => o.id == id)
+        
         if (index == -1) {
             throw new Error(`Error al actualizar: no se encontró el id ${id}`)
         } else {
-            objs[index] = elem
-            try {
-                await fs.writeFile(this.ruta, JSON.stringify(objs, null, 2))
-            } catch (error) {
-                throw new Error(`Error al borrar: ${error}`)
-            }
+            this.database.from(this.table).where('id',id).update({...elem})
+            .then(data=>{
+                return(JSON.parse(JSON.stringify(data)))}
+            )
+            .catch(err => console.log(err))
+            .finally(()=> this.database.destroy())
         }
     }
 
     async borrar(id) {
-        const objs = await this.listarAll()
-        const index = objs.findIndex(o => o.id == id)
         if (index == -1) {
             throw new Error(`Error al borrar: no se encontró el id ${id}`)
         }
-
-        objs.splice(index, 1)
-        try {
-            await fs.writeFile(this.ruta, JSON.stringify(objs, null, 2))
-        } catch (error) {
-            throw new Error(`Error al borrar: ${error}`)
-        }
+        this.database.from(this.table).where('id',id).del()
+            .then(()=>console.log('mensaje borrado')
+            )
+            .catch(err => console.log(err))
+            .finally(()=> this.database.destroy())
     }
 
     async borrarAll() {
-        try {
-            await fs.writeFile(this.ruta, JSON.stringify([], null, 2))
-        } catch (error) {
-            throw new Error(`Error al borrar todo: ${error}`)
-        }
+        this.database.from(this.table).select('*').del()
+            .then(()=>console.log('historial borrado'))
+            .catch(err => console.log(err))
+            .finally(()=> this.database.destroy())
     }
 }
 
